@@ -51,12 +51,12 @@ const main = async () => {
     form.append("count", downloadPageCount);
 
     const res = await client.post("emoji.adminList", { body: form }).json();
-    for (const emoji of res.emoji) {
-      if (emoji.is_alias) continue;
-      await downloadEmoji(emoji);
-      totalProcessed += 1;
-    }
+    const emojiDownloads = res.emoji
+      .filter((e) => !e.is_alias)
+      .map((e) => downloadEmoji(e));
+    await Promise.all(emojiDownloads);
 
+    totalProcessed += emojiDownloads.length;
     totalPages = res.paging.pages;
     console.log(
       `Processed page ${page} of ${totalPages}. ${totalProcessed} emoji downloaded.`
