@@ -12,13 +12,15 @@ const downloadEmoji = async (emoji) => {
   const { name, url, synonyms: aliases } = emoji;
   const emojiBuffer = await got.get(url).buffer();
   const extension = path.extname(url);
-  const filename = path.join(outputPath, `${name}${extension}`);
-  await fs.writeFile(filename, emojiBuffer);
+  const filename = `${name}${extension}`;
+  const filePath = path.join(outputPath, filename);
+  await fs.writeFile(filePath, emojiBuffer);
 
   for (const alias of aliases ?? []) {
-    const aliasFilename = path.join(outputPath, `${alias}.png`);
+    if (alias === name) continue;
+    const aliasFilePath = path.resolve(outputPath, `${alias}${extension}`);
     try {
-      await fs.link(filename, aliasFilename);
+      await fs.symlink(filename, aliasFilePath);
     } catch (err) {
       if (err.code === "EEXIST") continue;
       throw err;
