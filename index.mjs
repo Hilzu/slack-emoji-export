@@ -5,10 +5,9 @@ import got from "got";
 import FormData from "form-data";
 import path from "path";
 
-const outputPath = path.resolve("output");
-const downloadPageCount = 100;
+const countToDownloadPerPage = 100;
 
-const downloadEmoji = async (emoji) => {
+const downloadEmoji = async (emoji, outputPath) => {
   const { name, url, synonyms: aliases } = emoji;
   const emojiBuffer = await got.get(url).buffer();
   const extension = path.extname(url);
@@ -35,12 +34,30 @@ const main = async () => {
   const token = process.argv[3];
   if (!token) throw new Error("No token given as argument!");
 
+  const cookieAuth = process.argv[4];
+  if (!cookieAuth) throw new Error("No cookie auth given as argument!");
+
+  const outputPath = path.resolve("output", teamName);
   await fs.mkdir(outputPath, { recursive: true });
 
   const prefixUrl = `https://${teamName}.slack.com/api`;
+  const cookieAuthValue = encodeURIComponent(decodeURIComponent(cookieAuth));
+  const timestamp = Math.round(Date.now() / 1000);
   const client = got.extend({
     prefixUrl,
     retry: { limit: 5, methods: ["POST"] },
+    responseType: "json",
+    timeout: { request: 30_000 },
+    headers: { cookie: `d=${cookieAuthValue}; d-s=${timestamp}` },
+    hooks: {
+      afterResponse: [
+        (res) => {
+          if (!res.body.ok)
+            throw new Error(`Response was not ok: ${res.body.error}`);
+          return res;
+        },
+      ],
+    },
   });
   let page = 1;
   let totalPages = Number.MAX_SAFE_INTEGER;
@@ -50,12 +67,12 @@ const main = async () => {
     const form = new FormData();
     form.append("token", token);
     form.append("page", page);
-    form.append("count", downloadPageCount);
+    form.append("count", countToDownloadPerPage);
 
     const res = await client.post("emoji.adminList", { body: form }).json();
     const emojiDownloads = res.emoji
       .filter((e) => !e.is_alias)
-      .map((e) => downloadEmoji(e));
+      .map((e) => downloadEmoji(e, outputPath));
     await Promise.all(emojiDownloads);
 
     totalProcessed += emojiDownloads.length;
@@ -71,5 +88,5 @@ try {
   await main();
 } catch (err) {
   console.error("Error when running main!", err);
-  process.exit(1);
+  process.exitCode = 1;
 }
